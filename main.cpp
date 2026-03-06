@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <ctime>
 #include <cctype>
+#include <sstream>
 
 using namespace std;
 
@@ -15,7 +16,6 @@ struct Item {
 };
 
 const string DB_FILE = "stock_data.txt";
-int total_quantity = 0;
 
 // ---------------------------------------------------------
 // Functions File I/O
@@ -60,6 +60,10 @@ string toLowerCase(string str) {
 // ---------------------------------------------------------
 
 void showStock(const vector<Item>& stock) {
+
+    int total_quantity = 0;
+    double total_pirce = 0;
+
     cout << R"(
       ___           ___           ___           ___           ___           ___     
      /\  \         /\  \         /\  \         /\  \         /\__\         /\  \    
@@ -76,22 +80,23 @@ void showStock(const vector<Item>& stock) {
     cout << "=======================================================================================\n"; 
 
     // Header ตาราง
-    cout << left << setw(20) << "Name" << " | \t" 
-         << setw(10) << "price" << " | \t" 
-         << "quantity\n";
+    cout << left << setw(30) << "NAME" << " | \t" 
+         << setw(20) << "PRICE" << " | \t" 
+         << "QUANTITY\n";
         
     // รายการสินค้าทั้งหมด
     for (const auto& item : stock) {
-        cout << left << setw(20) << item.name << " | \t" 
-             << fixed << setprecision(1) << setw(10) << item.price << " | \t" 
+        cout << left << setw(30) << item.name << " | \t" 
+             << fixed << setprecision(1) << setw(20) << item.price << " | \t" 
              << item.quantity << "\n";
-             
-        total_quantity += item.quantity; 
+        
+        total_quantity += item.quantity;
+        total_pirce += item.price * item.quantity;
     }
     // Footer ตาราง (Total)
-    cout << "-----------------------------------------------\n";
-    cout << left << setw(20) << "Total" << " | \t" 
-         << setw(10) << "-" << " | \t" 
+    cout << "---------------------------------------------------------------------------------------\n";
+    cout << left << setw(30) << "Total" << " | \t" 
+         << setw(20) << total_pirce << " | \t" 
          << total_quantity << "\n";
 }
 
@@ -101,21 +106,38 @@ void showStock(const vector<Item>& stock) {
 
 void newStocks(vector<Item>& stock) {
     cout << "\nNew stocks : \n";
-    cout << "(Paste your items below format: [Name] [Price] [Quantity]. Type 'DONE' to finish)\n";
+    cout << "(Format: [\"Name\"] [Price] [Qty]. Use \"\" for names with spaces. Type 'DONE' to finish)\n";
+
+    cin.ignore(10000, '\n'); 
     
     while (true) {
-        string name;
-        double price;
-        int qty;
+        string line;
+        getline(cin, line);
         
-        cin >> quoted(name); 
+        if (line.empty()) continue;
+
+        stringstream ss(line);
+        string name;
+
+        ss >> quoted(name);
         
         if (toLowerCase(name) == "done") break;
-        
-        cin >> price >> qty;
 
-        string input_name_lower = toLowerCase(name);    
+        double price;
+        int qty;
 
+        if (!(ss >> price >> qty)) {
+            cout << "Invalid input. (Did you forget \"\" for names with spaces?)\n";
+            continue;
+        }
+
+        string extra;
+        if (ss >> extra) {
+            cout << "Invalid input. (Too many values)\n";
+            continue;
+        }
+
+        string input_name_lower = toLowerCase(name); 
         bool isDuplicate = false;
         for (const auto& item : stock) {
             if (toLowerCase(item.name) == input_name_lower) {
@@ -129,12 +151,11 @@ void newStocks(vector<Item>& stock) {
         } else {
             if (price < 0.0) price = 0.0;
             if (qty < 0) qty = 0; 
-            
-            stock.push_back({name, price, qty});
+            stock.push_back({input_name_lower, price, qty});
             cout << "------  New " << name << " Successful  ------\n";
         }
     }
-    saveToFile(stock);
+    saveToFile(stock); 
 }
 
 // ---------------------------------------------------------
@@ -217,6 +238,54 @@ void deleteStocks(vector<Item>& stock) {
 }
 
 // ---------------------------------------------------------
+// Functions Search
+// ---------------------------------------------------------
+
+void searchStocks(const vector<Item>& stock) {
+    cout << "\nSearch stocks : \n";
+    cout << "(Enter name to search. Use \"\" for names with spaces. Type 'DONE' to finish)\n";
+    
+    cin.ignore(10000, '\n');
+
+    while (true) {
+        string line;
+        getline(cin, line);
+        
+        if (line.empty()) continue;
+
+        stringstream ss(line);
+        string search_term;
+        
+        ss >> quoted(search_term);
+        
+        if (toLowerCase(search_term) == "done") break;
+
+        string extra;
+        if (ss >> extra) {
+            cout << "Invalid input.\n";
+            continue;
+        }
+
+        string search_lower = toLowerCase(search_term);
+        bool found = false;
+
+        for (const auto& item : stock) {
+            if (toLowerCase(item.name) == search_lower) {
+                cout << "------- Found :"<< item.name << " " 
+                     << fixed << setprecision(1) << item.price << " " 
+                     << item.quantity << " -------\n";
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            cout << "Not Found : " << search_term << "\n";
+        }
+    }
+}
+
+// ---------------------------------------------------------
 // Functions Export (CSV)
 // ---------------------------------------------------------
 
@@ -237,7 +306,7 @@ void exportCSV(const vector<Item>& stock) {
         file << "Name,price,quantity\n";
         for (const auto& item : stock) {
             file << item.name << "," 
-                 << fixed << setprecision(2) << item.price << "," 
+                 << item.price << "," 
                  << item.quantity << "\n";
         }
         file.close();
@@ -248,7 +317,7 @@ void exportCSV(const vector<Item>& stock) {
 }
 
 // ---------------------------------------------------------
-// Main Function (เมนูหลัก)
+// Main()
 // ---------------------------------------------------------
 
 int main() {
@@ -261,7 +330,7 @@ int main() {
     while (isRunning) {
         showStock(stock); 
         
-        cout << "\nChoose Function : New (N) , Update (U) , Delete (D) , Show (S) , Export (E) , Quit (Q) : ";
+        cout << "\nChoose Function : New (N) , Update (U) , Delete (D) , Show (S) , Find (F) , Export (E) , Quit (Q) : ";
         cin >> choice;
         choice = toupper(choice);
 
@@ -277,6 +346,9 @@ int main() {
                 break;
             case 'S':
                 cout << "\nRefreshing display...\n";
+                break;
+            case 'F':
+                searchStocks(stock);
                 break;
             case 'E':
                 exportCSV(stock);
