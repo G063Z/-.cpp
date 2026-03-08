@@ -6,6 +6,7 @@
 #include <ctime>
 #include <cctype>
 #include <sstream>
+#include <algorithm>
 
 using namespace std;
 
@@ -26,8 +27,7 @@ void loadFromFile(vector<Item>& stock) {
     ifstream file(DB_FILE);
     if (file.is_open()) {
         Item temp;
-        // โหลดข้อมูลเก่าขึ้นมาตอนเปิดโปรแกรม
-        while (file >> temp.name >> temp.price >> temp.quantity) {
+        while (file >> quoted(temp.name) >> temp.price >> temp.quantity) {
             stock.push_back(temp);
         }
         file.close();
@@ -38,7 +38,7 @@ void saveToFile(const vector<Item>& stock) {
     ofstream file(DB_FILE);
     if (file.is_open()) {
         for (const auto& item : stock) {
-            file << item.name << " " << item.price << " " << item.quantity << "\n";
+            file << quoted(item.name) << " " << item.price << " " << item.quantity << "\n";
         }
         file.close();
     }
@@ -56,13 +56,24 @@ string toLowerCase(string str) {
 }
 
 // ---------------------------------------------------------
+// Functions Blind Blackspace
+// ---------------------------------------------------------
+
+string trim(const string& s) {
+    size_t first = s.find_first_not_of(' ');
+    if (string::npos == first) return "";
+    size_t last = s.find_last_not_of(' ');
+    return s.substr(first, (last - first + 1));
+}
+
+// ---------------------------------------------------------
 // Functions Show
 // ---------------------------------------------------------
 
 void showStock(const vector<Item>& stock) {
 
     int total_quantity = 0;
-    double total_pirce = 0;
+    double total_price = 0;
 
     cout << R"(
       ___           ___           ___           ___           ___           ___     
@@ -80,8 +91,8 @@ void showStock(const vector<Item>& stock) {
     cout << "=======================================================================================\n"; 
 
     // Header ตาราง
-    cout << left << setw(30) << "NAME" << " | \t" 
-         << setw(20) << "PRICE" << " | \t" 
+    cout << left << setw(30) << "NAME" << " | \t"
+         << setw(20) << "PRICE" << " | \t"
          << "QUANTITY\n";
         
     // รายการสินค้าทั้งหมด
@@ -91,12 +102,12 @@ void showStock(const vector<Item>& stock) {
              << item.quantity << "\n";
         
         total_quantity += item.quantity;
-        total_pirce += item.price * item.quantity;
+        total_price += item.price * item.quantity;
     }
     // Footer ตาราง (Total)
     cout << "---------------------------------------------------------------------------------------\n";
     cout << left << setw(30) << "Total" << " | \t" 
-         << setw(20) << total_pirce << " | \t" 
+         << setw(20) << total_price << " | \t" 
          << total_quantity << "\n";
 }
 
@@ -108,26 +119,23 @@ void newStocks(vector<Item>& stock) {
     cout << "\nNew stocks : \n";
     cout << "(Format: [\"Name\"] [Price] [Qty]. Use \"\" for names with spaces. Type 'DONE' to finish)\n";
 
-    cin.ignore(10000, '\n'); 
-    
     while (true) {
         string line;
         getline(cin, line);
         
         if (line.empty()) continue;
+        if (toLowerCase(line) == "done") break;
 
         stringstream ss(line);
         string name;
-
-        ss >> quoted(name);
-        
-        if (toLowerCase(name) == "done") break;
-
         double price;
         int qty;
 
+        ss >> quoted(name);
+        name = trim(name);
+
         if (!(ss >> price >> qty)) {
-            cout << "Invalid input. (Did you forget \"\" for names with spaces?)\n";
+            cout << "Invalid input. (Did you forget \"\" for names with spaces?) or Not Format: [\"Name\"] [Price] [Qty].\n";
             continue;
         }
 
@@ -137,10 +145,9 @@ void newStocks(vector<Item>& stock) {
             continue;
         }
 
-        string input_name_lower = toLowerCase(name); 
         bool isDuplicate = false;
         for (const auto& item : stock) {
-            if (toLowerCase(item.name) == input_name_lower) {
+            if (toLowerCase(item.name) == toLowerCase(name)) {
                 isDuplicate = true;
                 break;
             }
@@ -151,9 +158,10 @@ void newStocks(vector<Item>& stock) {
         } else {
             if (price < 0.0) price = 0.0;
             if (qty < 0) qty = 0; 
-            stock.push_back({input_name_lower, price, qty});
+            stock.push_back({name, price, qty});
             cout << "------  New " << name << " Successful  ------\n";
         }
+
     }
     saveToFile(stock); 
 }
@@ -167,22 +175,35 @@ void updateStocks(vector<Item>& stock) {
     cout << "(Format: [\"Name\"] [PriceDiff] [QtyDiff]. Use \"\" for names with spaces. Type 'DONE' to finish)\n";
     
     while (true) {
-        string name;
-        cin >> quoted(name);
+        string line;
+        getline(cin, line);
         
-        if (toLowerCase(name) == "done") {
-            break;
-        }
+        if (line.empty()) continue;
+        if (toLowerCase(line) == "done") break;
 
+        stringstream ss(line);
+        string name;
         double price_change;
         int qty_change;
-        cin >> price_change >> qty_change;
 
-        string input_name_lower = toLowerCase(name); 
+        ss >> quoted(name);
+        name = trim(name); 
+
+        if (!(ss >> price_change >> qty_change)) {
+            cout << "Invalid input. (Did you forget \"\" for names with spaces?) or Not Format: [\"Name\"] [PriceDiff] [QtyDiff].\n";
+            continue;
+        }
+
+        string extra;
+        if (ss >> extra) {
+            cout << "Invalid input. (Too many values)\n";
+            continue;
+        }
+
         bool found = false;
         
         for (auto& item : stock) {
-            if (toLowerCase(item.name) == input_name_lower) {
+            if (toLowerCase(item.name) == toLowerCase(name)) {
                 found = true;
                 item.price += price_change;
                 item.quantity += qty_change;
@@ -211,27 +232,38 @@ void deleteStocks(vector<Item>& stock) {
     cout << "(Format: [\"Name\"]. Use \"\" for names with spaces. Type 'DONE' to finish)\n";
     
     while (true) {
-        string name;
-        cin >> quoted(name);
+        string line;
+        getline(cin, line);
         
-        if (toLowerCase(name) == "done") {
-            break;
+        if (line.empty()) continue;
+        if (toLowerCase(line) == "done") break;
+
+        stringstream ss(line);
+        string delete_term;
+
+        ss >> quoted(delete_term);
+        delete_term = trim(delete_term);
+
+        // เช็คว่ามีค่าขยะติดมาไหม (ลืม "")
+        string extra;
+        if (ss >> extra) {
+            cout << "Invalid input. (Did you forget \"\" for names with spaces?)\n";
+            continue;
         }
 
-        string input_name_lower = toLowerCase(name); 
         bool found = false;
         
         for (auto it = stock.begin(); it != stock.end(); ++it) {
-            if (toLowerCase(it->name) == input_name_lower) {
+            if (toLowerCase(it->name) == toLowerCase(delete_term)) {
                 stock.erase(it);
                 found = true;
-                cout << "------  Delete " << name << " Successful ------\n";
+                cout << "------  Delete " << delete_term << " Successful ------\n";
                 break; 
             }
         }
 
         if (!found) {
-            cout << "------  Fail Delete " << name << " (Not found in stocks) ------\n";
+            cout << "------  Fail Delete " << delete_term << " (Not found in stocks) ------\n";
         }
     }
     saveToFile(stock);
@@ -244,8 +276,6 @@ void deleteStocks(vector<Item>& stock) {
 void searchStocks(const vector<Item>& stock) {
     cout << "\nSearch stocks : \n";
     cout << "(Enter name to search. Use \"\" for names with spaces. Type 'DONE' to finish)\n";
-    
-    cin.ignore(10000, '\n');
 
     while (true) {
         string line;
@@ -255,23 +285,17 @@ void searchStocks(const vector<Item>& stock) {
 
         stringstream ss(line);
         string search_term;
-        
+
         ss >> quoted(search_term);
-        
+        search_term = trim(search_term);
+
         if (toLowerCase(search_term) == "done") break;
 
-        string extra;
-        if (ss >> extra) {
-            cout << "Invalid input.\n";
-            continue;
-        }
-
-        string search_lower = toLowerCase(search_term);
         bool found = false;
 
         for (const auto& item : stock) {
-            if (toLowerCase(item.name) == search_lower) {
-                cout << "------- Found :"<< item.name << " " 
+            if (toLowerCase(item.name) == toLowerCase(search_term)) {
+                cout << "------- Found : "<< item.name << " " 
                      << fixed << setprecision(1) << item.price << " " 
                      << item.quantity << " -------\n";
                 found = true;
@@ -354,13 +378,12 @@ int main() {
                 exportCSV(stock);
                 break;
             case 'Q':
-                cout << "Exiting program...\n";
                 isRunning = false;
                 break;
             default:
                 cout << "Invalid Input. Please try again.\n";
                 break;
-        }
+        } 
     }
     return 0;
-}
+} // g++ main.cpp -o stock.exe
