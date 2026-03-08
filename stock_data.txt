@@ -1,7 +1,5 @@
-bread 10 5
-Water 7 10
-Tango 90 12
-Observer ward 0 4
-Sentry Ward 50 12
-Blade Mail 2100 1
-Black King Bar 4050 1
+"black king bar" 4050 1
+"observer ward" 0 12
+"sentry ward" 50 12
+"smoke of deceit" 50 3
+"town portal scroll" 100 5
